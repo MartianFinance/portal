@@ -127,6 +127,14 @@ export default function WalletConnect() {
     }
   };
 
+  const handleConnectAnother = () => {
+    setDrawerOpen(false);
+    handleDisconnect();
+    setTimeout(() => {
+        setModalOpen(true);
+    }, 100)
+  }
+
   return (
     <>
       <div className="w-full max-w-sm space-y-4">
