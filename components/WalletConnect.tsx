@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { User, LogOut, Wallet as WalletIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useWallet, type Wallet } from "@solana/wallet-adapter-react";
@@ -15,6 +15,7 @@ import {
 import Link from "next/link";
 import { shorten } from "@/lib/helper";
 import { ConnectionDrawer } from "./ConnectionDrawer";
+import { Connection, LAMPORTS_PER_SOL } from "@solana/web3.js";
 
 export default function WalletConnect() {
   const {
@@ -31,6 +32,45 @@ export default function WalletConnect() {
   const [modalOpen, setModalOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [usdValue, setUsdValue] = useState<number | null>(null);
+  const [isBalanceLoading, setIsBalanceLoading] = useState(false);
+
+  const connection = useMemo(() => 
+    new Connection(process.env.NEXT_PUBLIC_SOLANA_RPC || 'https://api.mainnet-beta.solana.com'), 
+  []);
+
+  // Fetch balance and open drawer on connect
+  useEffect(() => {
+    if (connected && publicKey) {
+      const fetchBalance = async () => {
+        setIsBalanceLoading(true);
+        try {
+          // Fetch SOL balance
+          const balance = await connection.getBalance(publicKey);
+          const solBalance = balance / LAMPORTS_PER_SOL;
+
+          // Fetch SOL price from CoinGecko
+          const priceResponse = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
+          if (!priceResponse.ok) {
+            throw new Error('Failed to fetch SOL price');
+          }
+          const priceData = await priceResponse.json();
+          const solPrice = priceData.solana.usd;
+
+          setUsdValue(solBalance * solPrice);
+        } catch (error) {
+          console.error("Failed to fetch wallet balance or price:", error);
+          setUsdValue(null); // Set to null on error
+        } finally {
+          setIsBalanceLoading(false);
+        }
+      };
+
+      fetchBalance();
+      setDrawerOpen(true);
+    }
+  }, [connected, publicKey, connection]);
+
 
   // Detect mobile devices
   useEffect(() => {
@@ -45,7 +85,6 @@ export default function WalletConnect() {
     try {
       const saved = localStorage.getItem("walletName");
       if (saved) {
-        // Try to parse, if it fails, clear the item
         try {
           JSON.parse(saved);
         } catch {
@@ -53,7 +92,6 @@ export default function WalletConnect() {
         }
       }
     } catch (e) {
-      // If localStorage is not accessible, clear it
       try {
         localStorage.removeItem("walletName");
       } catch (e) {
@@ -88,10 +126,7 @@ export default function WalletConnect() {
     select(walletName);
     setModalOpen(false);
     
-    // For mobile, we rely on the wallet adapter's built-in mobile handling
-    // For desktop, we can attempt to connect immediately
     if (!isMobile) {
-      // Add a small delay to ensure wallet is selected before connecting
       setTimeout(async () => {
         try {
           await connect();
@@ -109,15 +144,12 @@ export default function WalletConnect() {
       window.dispatchEvent(new Event("authchange"));
     } catch (error) {
       console.error("Disconnect failed:", error);
-      // Force cleanup even if disconnect fails
       localStorage.removeItem("walletName");
       window.dispatchEvent(new Event("authchange"));
-      // Optionally refresh the page to ensure clean state
       window.location.reload();
     }
   };
 
-  // Handle manual connection for mobile wallets
   const handleManualConnect = async () => {
     if (wallet && isMobile) {
       try {
@@ -140,37 +172,16 @@ export default function WalletConnect() {
     <>
       <div className="w-full max-w-sm space-y-4">
         {connected && publicKey ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon"
-                className="rounded-full border-blue-500 text-blue-500 hover:bg-gray-800"
-              >
-                <User className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem>
-                <span className="font-mono text-xs">
-                  {shorten(publicKey.toBase58())}
-                </span>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/dashboard" className="flex gap-2">
-                  <WalletIcon className="w-4 h-4" /> Dashboard
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={handleDisconnect}
-                className="flex gap-2"
-              >
-                <LogOut className="w-4 h-4" /> Logout
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="flex items-center gap-4">
+            <span className="font-mono text-sm text-muted-foreground">
+              {shorten(publicKey.toBase58())}
+            </span>
+            <Button variant="outline" onClick={handleDisconnect} size="sm">
+              <LogOut className="w-4 h-4 mr-2" />
+              Disconnect
+            </Button>
+          </div>
         ) : wallet && isMobile ? (
-          // Show connect button for mobile when wallet is selected
           <Button
             className="w-full"
             onClick={handleManualConnect}
@@ -225,7 +236,14 @@ export default function WalletConnect() {
           </Dialog.Panel>
         </div>
       </Dialog>
-    <ConnectionDrawer isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} onConnectAnother={handleConnectAnother} />
+      <ConnectionDrawer 
+        isOpen={drawerOpen} 
+        onClose={() => setDrawerOpen(false)} 
+        onConnectAnother={handleConnectAnother}
+        publicKey={publicKey?.toBase58() || null}
+        usdValue={usdValue}
+        isBalanceLoading={isBalanceLoading}
+      />
     </>
   );
 }
