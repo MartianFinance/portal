@@ -29,6 +29,7 @@ export default function WalletConnect() {
   } = useWallet();
 
   const [modalOpen, setModalOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
   // Detect mobile devices
