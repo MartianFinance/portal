@@ -7,6 +7,7 @@ import { Analytics } from '@vercel/analytics/next';
 import './globals.css';
 import '../styles/fonts.css';
 import { WalletContextProvider } from '@/components/WalletContextProvider';
+import { Toaster } from 'sonner'; // Import Toaster
 
 const _geist = Geist({ subsets: ['latin'] });
 const _geistMono = Geist_Mono({ subsets: ['latin'] });
@@ -28,6 +29,7 @@ export default function RootLayout({
       <body className={`font-sans antialiased bg-background text-foreground`}>
         <WalletContextProvider>{children}</WalletContextProvider>
         <Analytics />
+        <Toaster /> {/* Add Toaster component here */}
       </body>
     </html>
   );
